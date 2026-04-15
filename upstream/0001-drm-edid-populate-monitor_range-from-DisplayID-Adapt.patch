@@ -1,6 +1,39 @@
---- a/drivers/gpu/drm/drm_edid.c
-+++ b/drivers/gpu/drm/drm_edid.c
-@@ -6567,6 +6567,57 @@
+From b83654084fb9acded10827f39e9db4933ead3834 Mon Sep 17 00:00:00 2001
+From: Jake S <jibsta210@users.noreply.github.com>
+Date: Tue, 14 Apr 2026 23:45:23 -0400
+Subject: [PATCH 1/2] drm/edid: populate monitor_range from DisplayID Adaptive
+ Sync block
+
+The DRM EDID parser only reads monitor range (min/max vfreq) from the
+base EDID Display Range Limits descriptor (tag 0xFD). Many modern eDP
+OLED panels ship with a DisplayID v2.0 extension containing an Adaptive
+Sync Data Block (tag 0x2B) that declares the VRR range, but no base
+EDID range limits descriptor at all.
+
+This leaves info->monitor_range zeroed on Intel/Nouveau/etc, while
+amdgpu has a private workaround (parse_edid_displayid_vrr). Add generic
+drm_get_monitor_range_displayid() so all drivers benefit.
+
+Handles both tag 0x2B (Adaptive Sync, CTA-861.6) and tag 0x25 (Dynamic
+Video Timing Range Limits, DisplayID v2.0 section 4.5).
+
+Only fills in monitor_range as a fallback when the base EDID parsing
+found nothing, preserving existing behavior for panels with proper Range
+Limits descriptors.
+
+Tested on Dell XPS 2026 (Intel Panther Lake, LG Display OLED eDP,
+3200x2000, VRR 20-120Hz via DisplayID tag 0x2B).
+
+Signed-off-by: Jake S <jibsta210@users.noreply.github.com>
+---
+ gpu/drm/drm_edid.c | 53 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+diff --git a/gpu/drm/drm_edid.c b/gpu/drm/drm_edid.c
+index 68390e7..ebefd18 100644
+--- a/gpu/drm/drm_edid.c
++++ b/gpu/drm/drm_edid.c
+@@ -6567,6 +6567,57 @@ static void drm_get_monitor_range(struct drm_connector *connector,
  		    info->monitor_range.min_vfreq, info->monitor_range.max_vfreq);
  }
  
@@ -58,7 +91,7 @@
  static void drm_parse_vesa_specific_block(struct drm_connector *connector,
  					  const struct displayid_block *block)
  {
-@@ -6756,6 +6807,8 @@
+@@ -6756,6 +6807,8 @@ static void update_display_info(struct drm_connector *connector,
  
  	drm_get_monitor_range(connector, drm_edid);
  
@@ -67,3 +100,6 @@
  	if (edid->revision < 3)
  		goto out;
  
+-- 
+2.53.0
+

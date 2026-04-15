@@ -1,0 +1,50 @@
+From fff6d0e1ef61b27c6625e044abf81ca81e283b0e Mon Sep 17 00:00:00 2001
+From: Jake S <jibsta210@users.noreply.github.com>
+Date: Tue, 14 Apr 2026 23:45:23 -0400
+Subject: [PATCH 0/2] drm: Enable eDP VRR for panels with DisplayID Adaptive Sync
+
+Many 2025-2026 laptops (Dell XPS, Framework, etc.) ship with OLED eDP
+panels that support VRR 20-120Hz. These panels advertise their VRR
+capability through a DisplayID v2.0 Adaptive Sync Data Block (tag 0x2B)
+in their EDID. VRR works fine on Windows.
+
+On Linux, VRR is broken due to two issues:
+
+1. The DRM EDID parser (drm_edid.c) only reads monitor range from the
+   base EDID Display Range Limits descriptor (tag 0xFD). It does not
+   parse the DisplayID Adaptive Sync block. This leaves monitor_range
+   zeroed. AMD's driver has a private workaround; the generic DRM
+   layer does not.
+
+2. The Intel display driver (intel_vrr.c) gates eDP VRR on a VBT
+   (Video BIOS Table) firmware flag. Most OEMs don't set this flag
+   because the Windows driver doesn't need it. This blocks VRR even
+   when the EDID clearly declares support.
+
+This series fixes both issues:
+ - Patch 1 adds generic DisplayID Adaptive Sync parsing to drm_edid.c,
+   benefiting all DRM drivers.
+ - Patch 2 relaxes the Intel eDP VRR gate to also accept EDID-based
+   capability when the VBT flag is absent.
+
+Tested on Dell XPS 2026 (Intel Panther Lake, xe driver, LG Display
+OLED 3200x2000). VRR 20-120Hz confirmed via kernel vblank event
+tracing -- display dynamically varies between 32Hz (idle) and 120Hz
+(active rendering).
+
+Related work: Adriano Vero posted a similar DisplayID range parsing
+patch to LKML (2026-03-28) which has not yet been merged.
+
+GitHub: https://github.com/jibsta210/edp-vrr-linux
+
+Jake S (2):
+  drm/edid: populate monitor_range from DisplayID Adaptive Sync block
+  drm/i915/display: allow eDP VRR when EDID has adaptive sync range
+
+ gpu/drm/drm_edid.c               | 53 ++++++++++++++++++++++++++++++++
+ gpu/drm/i915/display/intel_vrr.c |  7 ++++-
+ 2 files changed, 59 insertions(+), 1 deletion(-)
+
+-- 
+2.53.0
+

@@ -1,5 +1,5 @@
---- drivers/gpu/drm/i915/display/a/drivers/gpu/drm/i915/display/intel_vrr.c	2026-04-14 23:40:12.801591938 -0400
-+++ drivers/gpu/drm/i915/display/intel_vrr.c	2026-04-14 23:40:12.803298761 -0400
+--- a/drivers/gpu/drm/i915/display/intel_vrr.c
++++ b/drivers/gpu/drm/i915/display/intel_vrr.c
 @@ -47,7 +47,12 @@
  	 */
  	switch (connector->base.connector_type) {

@@ -1,0 +1,48 @@
+From fff6d0e1ef61b27c6625e044abf81ca81e283b0e Mon Sep 17 00:00:00 2001
+From: Jake S <jibsta210@users.noreply.github.com>
+Date: Tue, 14 Apr 2026 23:45:23 -0400
+Subject: [PATCH 2/2] drm/i915/display: allow eDP VRR when EDID has adaptive
+ sync range
+
+intel_vrr_is_capable() currently hard-gates eDP VRR on the VBT (Video
+BIOS Table) vrr flag. Many OEMs ship laptops with VRR-capable eDP OLED
+panels but do not set the VRR flag in the VBT, making VRR impossible
+on Linux even though the hardware supports it and works on Windows.
+
+Relax the eDP check: if the VBT flag is not set but the EDID provides
+a valid monitor range with delta > 10Hz (now also populated from
+DisplayID Adaptive Sync blocks by the previous patch), allow VRR. The
+existing checks for DPCD Ignore MSA and monitor range delta still apply.
+
+This mirrors the approach taken by amdgpu, which has its own EDID-based
+VRR fallback (parse_edid_displayid_vrr) for exactly this class of panel.
+
+Tested on Dell XPS 2026 (Intel Panther Lake / xe driver, LG Display
+OLED eDP, 3200x2000, VRR 20-120Hz confirmed via vblank event tracing).
+
+Signed-off-by: Jake S <jibsta210@users.noreply.github.com>
+---
+ gpu/drm/i915/display/intel_vrr.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/gpu/drm/i915/display/intel_vrr.c b/gpu/drm/i915/display/intel_vrr.c
+index bea0057..f527471 100644
+--- a/gpu/drm/i915/display/intel_vrr.c
++++ b/gpu/drm/i915/display/intel_vrr.c
+@@ -47,7 +47,12 @@ bool intel_vrr_is_capable(struct intel_connector *connector)
+ 	 */
+ 	switch (connector->base.connector_type) {
+ 	case DRM_MODE_CONNECTOR_eDP:
+-		if (!connector->panel.vbt.vrr)
++		/*
++		 * Prefer VBT flag, but fall back to EDID monitor range
++		 * for panels where OEM firmware omits the VBT VRR flag.
++		 */
++		if (!connector->panel.vbt.vrr &&
++		    !(info->monitor_range.max_vfreq - info->monitor_range.min_vfreq > 10))
+ 			return false;
+ 		fallthrough;
+ 	case DRM_MODE_CONNECTOR_DisplayPort:
+-- 
+2.53.0
+
