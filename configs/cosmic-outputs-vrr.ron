@@ -1,0 +1,29 @@
+// Example cosmic-comp output config with VRR force-enabled.
+// Location: ~/.local/state/cosmic-comp/outputs.ron
+//
+// VRR modes:
+//   r#false  = VRR off
+//   r#true   = VRR on when supported (automatic)
+//   force    = VRR always on
+(
+    config: {
+        [
+            (
+                connector: "eDP-1",
+                make: "LG Display",
+                model: "0x07C5",
+            ),
+        ]: [
+            (
+                mode: ((3200, 2000), Some(120000)),
+                vrr: force,
+                scale: 1.4,
+                transform: Normal,
+                position: (0, 0),
+                enabled: r#true,
+                max_bpc: Some(12),
+                xwayland_primary: true,
+            ),
+        ],
+    },
+)

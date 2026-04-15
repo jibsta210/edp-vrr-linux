@@ -1,0 +1,69 @@
+--- a/drivers/gpu/drm/drm_edid.c	2026-04-14 23:40:12.783373368 -0400
++++ drivers/gpu/drm/drm_edid.c	2026-04-14 23:40:12.795057400 -0400
+@@ -6567,6 +6567,57 @@
+ 		    info->monitor_range.min_vfreq, info->monitor_range.max_vfreq);
+ }
+ 
++/*
++ * Parse DisplayID v2.0 Adaptive Sync Data Block (tag 0x2B) as a fallback
++ * when the base EDID has no Range Limits descriptor. Many modern eDP OLED
++ * panels only advertise their VRR range via DisplayID, not base EDID.
++ *
++ * Also handles tag 0x25 (Dynamic Video Timing Range Limits).
++ */
++static void drm_get_monitor_range_displayid(struct drm_connector *connector,
++					    const struct drm_edid *drm_edid)
++{
++	struct drm_display_info *info = &connector->display_info;
++	const struct displayid_block *block;
++	struct displayid_iter iter;
++
++	if (info->monitor_range.min_vfreq && info->monitor_range.max_vfreq)
++		return;
++
++	displayid_iter_edid_begin(drm_edid, &iter);
++	displayid_iter_for_each(block, &iter) {
++		const u8 *data = (const u8 *)block + sizeof(*block);
++		int len = block->num_bytes;
++		u16 min_vfreq, max_vfreq;
++
++		if (block->tag == 0x2b && len >= 6) {
++			/* Adaptive Sync Data Block (CTA-861.6) */
++			min_vfreq = data[2];
++			max_vfreq = data[3] | ((u16)(data[4] & 0x3) << 8);
++		} else if (block->tag == DATA_BLOCK_2_DYNAMIC_VIDEO_TIMING &&
++			   len >= 6) {
++			/* Dynamic Video Timing Range Limits (DisplayID v2.0) */
++			int offset = ((data[0] >> 3) & 0x3) ? 5 : 3;
++
++			if (len < offset + 3)
++				continue;
++			min_vfreq = data[offset];
++			max_vfreq = data[offset + 1] |
++				    ((u16)(data[offset + 2] & 0x3) << 8);
++		} else {
++			continue;
++		}
++
++		if (max_vfreq && min_vfreq && max_vfreq > min_vfreq) {
++			info->monitor_range.min_vfreq = min_vfreq;
++			info->monitor_range.max_vfreq = max_vfreq;
++			break;
++		}
++	}
++	displayid_iter_end(&iter);
++}
++
++
+ static void drm_parse_vesa_specific_block(struct drm_connector *connector,
+ 					  const struct displayid_block *block)
+ {
+@@ -6756,6 +6807,8 @@
+ 
+ 	drm_get_monitor_range(connector, drm_edid);
+ 
++	drm_get_monitor_range_displayid(connector, drm_edid);
++
+ 	if (edid->revision < 3)
+ 		goto out;
+ 
